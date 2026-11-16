@@ -1,0 +1,58 @@
+name: Monitor de pasajes
+
+on:
+  schedule:
+    - cron: "43 */2 * * *"   # cada 2 horas (hora UTC); GitHub atrasa o saltea corridas, así que se piden más
+  workflow_dispatch:          # permite lanzarlo a mano
+    inputs:
+      probar:
+        description: "Mandar solo un aviso de prueba"
+        type: boolean
+        default: false
+      ejemplo:
+        description: "Revisar y mandar un aviso de baja simulada"
+        type: boolean
+        default: false
+      diario:
+        description: "Revisar y mandar el resumen diario ahora"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write             # para guardar el historial en el repositorio
+
+concurrency:
+  group: monitor
+  cancel-in-progress: false
+
+jobs:
+  revisar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cargar claves de avisos
+        env:
+          CONFIG_JSON: ${{ secrets.CONFIG_JSON }}
+        run: |
+          if [ -n "$CONFIG_JSON" ]; then printf '%s' "$CONFIG_JSON" > config.json; else echo "Sin CONFIG_JSON: los avisos solo salen en este registro"; fi
+
+      - name: Revisar precios y códigos
+        env:
+          TZ: America/Argentina/Buenos_Aires
+        run: python3 monitor.py ${{ inputs.probar && '--probar' || inputs.ejemplo && '--ejemplo' || inputs.diario && '--diario' || '' }}
+
+      - name: Guardar historial
+        if: always()
+        run: |
+          git config user.name "monitor-pasajes"
+          git config user.email "actions@users.noreply.github.com"
+          if [ -f historial.enc ]; then
+            git add historial.enc
+          else
+            echo "::warning::Sin historial_clave en CONFIG_JSON: el historial se guarda sin cifrar"
+            git add -f historial.db
+          fi
+          git diff --cached --quiet || git commit -m "Historial $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push

@@ -1,0 +1,8 @@
+config.json
+monitor.log
+ultimo_aviso.txt
+__pycache__/
+.DS_Store
+tarea-mac.plist.apagada
+ultimo_aviso.html
+historial.db
